@@ -61,17 +61,15 @@ exit_if_fail sleep 60
 exit_if_fail go test -race ./...
 
 # Simple Integration Tests
-#   check that version was properly set
-exit_if_fail "./telegraf -version | grep $VERSION"
 #   check that one test cpu & mem output work
 tmpdir=$(mktemp -d)
-./telegraf -sample-config > $tmpdir/config.toml
+./telegraf config > $tmpdir/config.toml
 exit_if_fail ./telegraf -config $tmpdir/config.toml \
     -test -input-filter cpu:mem
 
 gzip telegraf -c > "$CIRCLE_ARTIFACTS/telegraf.gz"
 
-if git describe --exact-match HEAD; then
+if git describe --exact-match HEAD 2>&1 >/dev/null; then
     # install fpm (packaging dependency)
     exit_if_fail gem install fpm
     # install boto & rpm (packaging & AWS dependencies)

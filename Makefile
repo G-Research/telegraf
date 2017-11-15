@@ -15,7 +15,6 @@ ifdef VERSION
 	LDFLAGS += -X main.version=$(VERSION)
 endif
 
-
 all:
 	$(MAKE) deps
 	$(MAKE) telegraf
@@ -25,7 +24,7 @@ deps:
 	gdm restore
 
 telegraf:
-	go build -o $(TELEGRAF) -ldflags "$(LDFLAGS)" ./cmd/telegraf/telegraf.go
+	go build -i -o $(TELEGRAF) -ldflags "$(LDFLAGS)" ./cmd/telegraf/telegraf.go
 
 go-install:
 	go install -ldflags "-w -s $(LDFLAGS)" ./cmd/telegraf
@@ -49,11 +48,16 @@ test-all: lint
 	go test ./...
 
 package:
-	./scripts/build.py --package --version="$(VERSION)" --platform=linux --arch=all --upload
+	./scripts/build.py --package --platform=all --arch=all
 
 clean:
 	-rm -f telegraf
 	-rm -f telegraf.exe
+
+docker-image:
+	./scripts/build.py --package --platform=linux --arch=amd64
+	cp build/telegraf*$(COMMIT)*.deb .
+	docker build -f scripts/dev.docker --build-arg "package=telegraf*$(COMMIT)*.deb" -t "telegraf-dev:$(COMMIT)" .
 
 # Run all docker containers necessary for integration tests
 docker-run:
@@ -82,6 +86,12 @@ docker-run:
 		-e SLAPD_CONFIG_ROOTPW="secret" \
 		-p "389:389" -p "636:636" \
 		-d cobaugh/openldap-alpine
+	docker run --name cratedb \
+		-p "6543:5432" \
+		-d crate crate \
+		-Cnetwork.host=0.0.0.0 \
+		-Ctransport.host=localhost \
+		-Clicense.enterprise=false
 
 # Run docker containers necessary for integration tests; skipping services provided
 # by CircleCI
@@ -106,12 +116,18 @@ docker-run-circle:
 		-e SLAPD_CONFIG_ROOTPW="secret" \
 		-p "389:389" -p "636:636" \
 		-d cobaugh/openldap-alpine
+	docker run --name cratedb \
+		-p "6543:5432" \
+		-d crate crate \
+		-Cnetwork.host=0.0.0.0 \
+		-Ctransport.host=localhost \
+		-Clicense.enterprise=false
 
 docker-kill:
 	-docker kill aerospike elasticsearch kafka memcached mqtt mysql nats nsq \
-		openldap postgres rabbitmq redis riemann zookeeper
+		openldap postgres rabbitmq redis riemann zookeeper cratedb
 	-docker rm aerospike elasticsearch kafka memcached mqtt mysql nats nsq \
-		openldap postgres rabbitmq redis riemann zookeeper
+		openldap postgres rabbitmq redis riemann zookeeper cratedb
 
 .PHONY: deps telegraf telegraf.exe install test test-windows lint test-all \
-	package clean docker-run docker-run-circle docker-kill
+	package clean docker-run docker-run-circle docker-kill docker-image
