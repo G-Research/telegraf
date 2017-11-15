@@ -326,9 +326,7 @@ func scanTagsValue(buf []byte, i int) (int, int, error) {
 func scanFields(buf []byte, i int) (int, []byte, error) {
 	start := skipWhitespace(buf, i)
 	i = start
-
-	// track how many '"" we've seen since last '='
-	quotes := 0
+	quoted := false
 
 	// tracks how many '=' we've seen
 	equals := 0
@@ -352,17 +350,13 @@ func scanFields(buf []byte, i int) (int, []byte, error) {
 		// Only quote values in the field value since quotes are not significant
 		// in the field key
 		if buf[i] == '"' && equals > commas {
+			quoted = !quoted
 			i++
-			quotes++
-			if quotes > 2 {
-				break
-			}
 			continue
 		}
 
 		// If we see an =, ensure that there is at least on char before and after it
-		if buf[i] == '=' && quotes != 1 {
-			quotes = 0
+		if buf[i] == '=' && !quoted {
 			equals++
 
 			// check for "... =123" but allow "a\ =123"
@@ -404,18 +398,18 @@ func scanFields(buf []byte, i int) (int, []byte, error) {
 			}
 		}
 
-		if buf[i] == ',' && quotes != 1 {
+		if buf[i] == ',' && !quoted {
 			commas++
 		}
 
 		// reached end of block?
-		if buf[i] == ' ' && quotes != 1 {
+		if buf[i] == ' ' && !quoted {
 			break
 		}
 		i++
 	}
 
-	if quotes != 0 && quotes != 2 {
+	if quoted {
 		return i, buf[start:i], makeError("unbalanced quotes", buf, i)
 	}
 
@@ -653,7 +647,7 @@ func skipWhitespace(buf []byte, i int) int {
 }
 
 // makeError is a helper function for making a metric parsing error.
-//   reason is the reason why the error occurred.
+//   reason is the reason that the error occured.
 //   buf should be the current buffer we are parsing.
 //   i is the current index, to give some context on where in the buffer we are.
 func makeError(reason string, buf []byte, i int) error {

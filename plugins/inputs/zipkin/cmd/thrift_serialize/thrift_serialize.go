@@ -62,17 +62,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("%v\n", err)
 		}
-		if err := ioutil.WriteFile(outFileName, raw, 0644); err != nil {
-			log.Fatalf("%v", err)
-		}
+		ioutil.WriteFile(outFileName, raw, 0644)
 	case "thrift":
 		raw, err := thriftToJSONSpans(contents)
 		if err != nil {
 			log.Fatalf("%v\n", err)
 		}
-		if err := ioutil.WriteFile(outFileName, raw, 0644); err != nil {
-			log.Fatalf("%v", err)
-		}
+		ioutil.WriteFile(outFileName, raw, 0644)
 	default:
 		log.Fatalf("Unsupported input type")
 	}

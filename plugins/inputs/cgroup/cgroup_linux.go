@@ -225,7 +225,7 @@ var fileFormats = [...]fileFormat{
 }
 
 func numberOrString(s string) interface{} {
-	i, err := strconv.ParseInt(s, 10, 64)
+	i, err := strconv.Atoi(s)
 	if err == nil {
 		return i
 	}

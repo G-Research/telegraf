@@ -40,7 +40,6 @@ func TestSnakeCase(t *testing.T) {
 var (
 	sleepbin, _ = exec.LookPath("sleep")
 	echobin, _  = exec.LookPath("echo")
-	shell, _    = exec.LookPath("sh")
 )
 
 func TestRunTimeout(t *testing.T) {
@@ -85,13 +84,13 @@ func TestCombinedOutput(t *testing.T) {
 // test that CombinedOutputTimeout and exec.Cmd.CombinedOutput return
 // the same output from a failed command.
 func TestCombinedOutputError(t *testing.T) {
-	if shell == "" {
-		t.Skip("'sh' binary not available on OS, skipping.")
+	if sleepbin == "" {
+		t.Skip("'sleep' binary not available on OS, skipping.")
 	}
-	cmd := exec.Command(shell, "-c", "false")
+	cmd := exec.Command(sleepbin, "foo")
 	expected, err := cmd.CombinedOutput()
 
-	cmd2 := exec.Command(shell, "-c", "false")
+	cmd2 := exec.Command(sleepbin, "foo")
 	actual, err := CombinedOutputTimeout(cmd2, time.Second)
 
 	assert.Error(t, err)
@@ -99,10 +98,10 @@ func TestCombinedOutputError(t *testing.T) {
 }
 
 func TestRunError(t *testing.T) {
-	if shell == "" {
-		t.Skip("'sh' binary not available on OS, skipping.")
+	if sleepbin == "" {
+		t.Skip("'sleep' binary not available on OS, skipping.")
 	}
-	cmd := exec.Command(shell, "-c", "false")
+	cmd := exec.Command(sleepbin, "foo")
 	err := RunTimeout(cmd, time.Second)
 
 	assert.Error(t, err)

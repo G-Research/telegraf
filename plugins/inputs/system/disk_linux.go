@@ -5,25 +5,24 @@ import (
 	"fmt"
 	"os"
 	"strings"
-
-	"golang.org/x/sys/unix"
+	"syscall"
 )
 
 type diskInfoCache struct {
-	udevDataPath string
-	values       map[string]string
+	stat   syscall.Stat_t
+	values map[string]string
 }
 
 var udevPath = "/run/udev/data"
 
 func (s *DiskIOStats) diskInfo(devName string) (map[string]string, error) {
-	var err error
-	var stat unix.Stat_t
-
-	path := "/dev/" + devName
-	err = unix.Stat(path, &stat)
+	fi, err := os.Stat("/dev/" + devName)
 	if err != nil {
 		return nil, err
+	}
+	stat, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, nil
 	}
 
 	if s.infoCache == nil {
@@ -32,26 +31,25 @@ func (s *DiskIOStats) diskInfo(devName string) (map[string]string, error) {
 	ic, ok := s.infoCache[devName]
 	if ok {
 		return ic.values, nil
+	} else {
+		ic = diskInfoCache{
+			stat:   *stat,
+			values: map[string]string{},
+		}
+		s.infoCache[devName] = ic
 	}
+	di := ic.values
 
 	major := stat.Rdev >> 8 & 0xff
 	minor := stat.Rdev & 0xff
-	udevDataPath := fmt.Sprintf("%s/b%d:%d", udevPath, major, minor)
 
-	di := map[string]string{}
-
-	s.infoCache[devName] = diskInfoCache{
-		udevDataPath: udevDataPath,
-		values:       di,
-	}
-
-	f, err := os.Open(udevDataPath)
+	f, err := os.Open(fmt.Sprintf("%s/b%d:%d", udevPath, major, minor))
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-
 	scnr := bufio.NewScanner(f)
+
 	for scnr.Scan() {
 		l := scnr.Text()
 		if len(l) < 4 || l[:2] != "E:" {

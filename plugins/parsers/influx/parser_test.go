@@ -1,7 +1,6 @@
 package influx
 
 import (
-	"fmt"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -25,8 +24,6 @@ const (
 	validInfluxNoNewline = "cpu_load_short,cpu=cpu0 value=10 1257894000000000000"
 	invalidInflux        = "I don't think this is line protocol\n"
 	invalidInflux2       = "{\"a\": 5, \"b\": {\"c\": 6}}\n"
-	invalidInflux3       = `name text="unescaped "quote" ",value=1 1498077493081000000`
-	invalidInflux4       = `name text="unbalanced "quote" 1498077493081000000`
 )
 
 const influxMulti = `
@@ -224,21 +221,10 @@ func TestParseInvalidInflux(t *testing.T) {
 	assert.Error(t, err)
 	_, err = parser.Parse([]byte(invalidInflux2))
 	assert.Error(t, err)
-	_, err = parser.Parse([]byte(invalidInflux3))
-	assert.Error(t, err)
-	fmt.Printf("%+v\n", err) // output for debug
-	_, err = parser.Parse([]byte(invalidInflux4))
-	assert.Error(t, err)
-
 	_, err = parser.ParseLine(invalidInflux)
 	assert.Error(t, err)
 	_, err = parser.ParseLine(invalidInflux2)
 	assert.Error(t, err)
-	_, err = parser.ParseLine(invalidInflux3)
-	assert.Error(t, err)
-	_, err = parser.ParseLine(invalidInflux4)
-	assert.Error(t, err)
-
 }
 
 func BenchmarkParse(b *testing.B) {

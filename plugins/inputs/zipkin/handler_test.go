@@ -10,15 +10,14 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/influxdata/telegraf/plugins/inputs/zipkin/trace"
 )
 
 type MockRecorder struct {
-	Data trace.Trace
+	Data Trace
 	Err  error
 }
 
-func (m *MockRecorder) Record(t trace.Trace) error {
+func (m *MockRecorder) Record(t Trace) error {
 	m.Data = t
 	return nil
 }
@@ -40,7 +39,6 @@ func TestSpanHandler(t *testing.T) {
 		ioutil.NopCloser(
 			bytes.NewReader(dat)))
 
-	r.Header.Set("Content-Type", "application/x-thrift")
 	handler := NewSpanHandler("/api/v1/spans")
 	mockRecorder := &MockRecorder{}
 	handler.recorder = mockRecorder
@@ -53,8 +51,8 @@ func TestSpanHandler(t *testing.T) {
 	got := mockRecorder.Data
 
 	parentID := strconv.FormatInt(22964302721410078, 10)
-	want := trace.Trace{
-		{
+	want := Trace{
+		Span{
 			Name:        "Child",
 			ID:          "8090652509916334619",
 			TraceID:     "22c4fc8ab3669045",
@@ -62,17 +60,18 @@ func TestSpanHandler(t *testing.T) {
 			Timestamp:   time.Unix(0, 1498688360851331*int64(time.Microsecond)).UTC(),
 			Duration:    time.Duration(53106) * time.Microsecond,
 			ServiceName: "trivial",
-			Annotations: []trace.Annotation{},
-			BinaryAnnotations: []trace.BinaryAnnotation{
-				{
+			Annotations: []Annotation{},
+			BinaryAnnotations: []BinaryAnnotation{
+				BinaryAnnotation{
 					Key:         "lc",
 					Value:       "trivial",
 					Host:        "127.0.0.1",
 					ServiceName: "trivial",
+					Type:        "STRING",
 				},
 			},
 		},
-		{
+		Span{
 			Name:        "Child",
 			ID:          "103618986556047333",
 			TraceID:     "22c4fc8ab3669045",
@@ -80,17 +79,18 @@ func TestSpanHandler(t *testing.T) {
 			Timestamp:   time.Unix(0, 1498688360904552*int64(time.Microsecond)).UTC(),
 			Duration:    time.Duration(50410) * time.Microsecond,
 			ServiceName: "trivial",
-			Annotations: []trace.Annotation{},
-			BinaryAnnotations: []trace.BinaryAnnotation{
-				{
+			Annotations: []Annotation{},
+			BinaryAnnotations: []BinaryAnnotation{
+				BinaryAnnotation{
 					Key:         "lc",
 					Value:       "trivial",
 					Host:        "127.0.0.1",
 					ServiceName: "trivial",
+					Type:        "STRING",
 				},
 			},
 		},
-		{
+		Span{
 			Name:        "Parent",
 			ID:          "22964302721410078",
 			TraceID:     "22c4fc8ab3669045",
@@ -98,32 +98,33 @@ func TestSpanHandler(t *testing.T) {
 			Timestamp:   time.Unix(0, 1498688360851318*int64(time.Microsecond)).UTC(),
 			Duration:    time.Duration(103680) * time.Microsecond,
 			ServiceName: "trivial",
-			Annotations: []trace.Annotation{
-				{
+			Annotations: []Annotation{
+				Annotation{
 					Timestamp:   time.Unix(0, 1498688360851325*int64(time.Microsecond)).UTC(),
 					Value:       "Starting child #0",
 					Host:        "127.0.0.1",
 					ServiceName: "trivial",
 				},
-				{
+				Annotation{
 					Timestamp:   time.Unix(0, 1498688360904545*int64(time.Microsecond)).UTC(),
 					Value:       "Starting child #1",
 					Host:        "127.0.0.1",
 					ServiceName: "trivial",
 				},
-				{
+				Annotation{
 					Timestamp:   time.Unix(0, 1498688360954992*int64(time.Microsecond)).UTC(),
 					Value:       "A Log",
 					Host:        "127.0.0.1",
 					ServiceName: "trivial",
 				},
 			},
-			BinaryAnnotations: []trace.BinaryAnnotation{
-				{
+			BinaryAnnotations: []BinaryAnnotation{
+				BinaryAnnotation{
 					Key:         "lc",
 					Value:       "trivial",
 					Host:        "127.0.0.1",
 					ServiceName: "trivial",
+					Type:        "STRING",
 				},
 			},
 		},

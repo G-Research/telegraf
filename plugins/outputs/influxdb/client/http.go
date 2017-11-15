@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"time"
 )
 
@@ -54,7 +53,6 @@ func NewHTTP(config HTTPConfig, defaultWP WriteParams) (Client, error) {
 		}
 	} else {
 		transport = http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
 			TLSClientConfig: config.TLSConfig,
 		}
 	}
@@ -69,8 +67,6 @@ func NewHTTP(config HTTPConfig, defaultWP WriteParams) (Client, error) {
 		},
 	}, nil
 }
-
-type HTTPHeaders map[string]string
 
 type HTTPConfig struct {
 	// URL should be of the form "http://host:port" (REQUIRED)
@@ -98,9 +94,6 @@ type HTTPConfig struct {
 
 	// Proxy URL should be of the form "http://host:port"
 	HTTPProxy string
-
-	// HTTP headers to append to HTTP requests.
-	HTTPHeaders HTTPHeaders
 
 	// The content encoding mechanism to use for each request.
 	ContentEncoding string
@@ -137,13 +130,60 @@ func (c *httpClient) Query(command string) error {
 	return c.doRequest(req, http.StatusOK)
 }
 
-func (c *httpClient) WriteStream(r io.Reader) error {
-	req, err := c.makeWriteRequest(r, c.writeURL)
+func (c *httpClient) Write(b []byte) (int, error) {
+	req, err := c.makeWriteRequest(bytes.NewReader(b), len(b), c.writeURL)
 	if err != nil {
-		return err
+		return 0, nil
 	}
 
-	return c.doRequest(req, http.StatusNoContent)
+	err = c.doRequest(req, http.StatusNoContent)
+	if err == nil {
+		return len(b), nil
+	}
+	return 0, err
+}
+
+func (c *httpClient) WriteWithParams(b []byte, wp WriteParams) (int, error) {
+	req, err := c.makeWriteRequest(bytes.NewReader(b), len(b), writeURL(c.url, wp))
+	if err != nil {
+		return 0, nil
+	}
+
+	err = c.doRequest(req, http.StatusNoContent)
+	if err == nil {
+		return len(b), nil
+	}
+	return 0, err
+}
+
+func (c *httpClient) WriteStream(r io.Reader, contentLength int) (int, error) {
+	req, err := c.makeWriteRequest(r, contentLength, c.writeURL)
+	if err != nil {
+		return 0, nil
+	}
+
+	err = c.doRequest(req, http.StatusNoContent)
+	if err == nil {
+		return contentLength, nil
+	}
+	return 0, err
+}
+
+func (c *httpClient) WriteStreamWithParams(
+	r io.Reader,
+	contentLength int,
+	wp WriteParams,
+) (int, error) {
+	req, err := c.makeWriteRequest(r, contentLength, writeURL(c.url, wp))
+	if err != nil {
+		return 0, nil
+	}
+
+	err = c.doRequest(req, http.StatusNoContent)
+	if err == nil {
+		return contentLength, nil
+	}
+	return 0, err
 }
 
 func (c *httpClient) doRequest(
@@ -185,6 +225,7 @@ func (c *httpClient) doRequest(
 
 func (c *httpClient) makeWriteRequest(
 	body io.Reader,
+	contentLength int,
 	writeURL string,
 ) (*http.Request, error) {
 	req, err := c.makeRequest(writeURL, body)
@@ -193,6 +234,8 @@ func (c *httpClient) makeWriteRequest(
 	}
 	if c.config.ContentEncoding == "gzip" {
 		req.Header.Set("Content-Encoding", "gzip")
+	} else {
+		req.Header.Set("Content-Length", fmt.Sprint(contentLength))
 	}
 	return req, nil
 }
@@ -210,11 +253,6 @@ func (c *httpClient) makeRequest(uri string, body io.Reader) (*http.Request, err
 	if err != nil {
 		return nil, err
 	}
-
-	for header, value := range c.config.HTTPHeaders {
-		req.Header.Set(header, value)
-	}
-
 	req.Header.Set("Content-Type", "text/plain")
 	req.Header.Set("User-Agent", c.config.UserAgent)
 	if c.config.Username != "" && c.config.Password != "" {
@@ -256,11 +294,8 @@ func writeURL(u *url.URL, wp WriteParams) string {
 	}
 
 	u.RawQuery = params.Encode()
-	p := u.Path
-	u.Path = path.Join(p, "write")
-	s := u.String()
-	u.Path = p
-	return s
+	u.Path = "write"
+	return u.String()
 }
 
 func queryURL(u *url.URL, command string) string {
@@ -268,9 +303,6 @@ func queryURL(u *url.URL, command string) string {
 	params.Set("q", command)
 
 	u.RawQuery = params.Encode()
-	p := u.Path
-	u.Path = path.Join(p, "query")
-	s := u.String()
-	u.Path = p
-	return s
+	u.Path = "query"
+	return u.String()
 }

@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -61,8 +62,18 @@ func (c *udpClient) Query(command string) error {
 	return nil
 }
 
+// Write will send the byte stream to the given UDP client endpoint
+func (c *udpClient) Write(b []byte) (int, error) {
+	return c.WriteStream(bytes.NewReader(b), -1)
+}
+
+// WriteWithParams are ignored by the UDP client, will forward to WriteStream
+func (c *udpClient) WriteWithParams(b []byte, wp WriteParams) (int, error) {
+	return c.WriteStream(bytes.NewReader(b), -1)
+}
+
 // WriteStream will send the provided data through to the client, contentLength is ignored by the UDP client
-func (c *udpClient) WriteStream(r io.Reader) error {
+func (c *udpClient) WriteStream(r io.Reader, contentLength int) (int, error) {
 	var totaln int
 	for {
 		nR, err := r.Read(c.buffer)
@@ -70,14 +81,14 @@ func (c *udpClient) WriteStream(r io.Reader) error {
 			break
 		}
 		if err != io.EOF && err != nil {
-			return err
+			return totaln, err
 		}
 
 		if c.buffer[nR-1] == uint8('\n') {
 			nW, err := c.conn.Write(c.buffer[0:nR])
 			totaln += nW
 			if err != nil {
-				return err
+				return totaln, err
 			}
 		} else {
 			log.Printf("E! Could not fit point into UDP payload; dropping")
@@ -88,7 +99,7 @@ func (c *udpClient) WriteStream(r io.Reader) error {
 					break
 				}
 				if err != io.EOF && err != nil {
-					return err
+					return totaln, err
 				}
 				if c.buffer[nR-1] == uint8('\n') {
 					break
@@ -96,7 +107,13 @@ func (c *udpClient) WriteStream(r io.Reader) error {
 			}
 		}
 	}
-	return nil
+	return totaln, nil
+}
+
+// WriteStreamWithParams will forward the stream to the client backend, contentLength is ignored by the UDP client
+// write params are ignored by the UDP client
+func (c *udpClient) WriteStreamWithParams(r io.Reader, contentLength int, wp WriteParams) (int, error) {
+	return c.WriteStream(r, -1)
 }
 
 // Close will terminate the provided client connection

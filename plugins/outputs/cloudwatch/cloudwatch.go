@@ -9,7 +9,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
-	"github.com/aws/aws-sdk-go/service/sts"
 
 	"github.com/influxdata/telegraf"
 	internalaws "github.com/influxdata/telegraf/internal/config/aws"
@@ -72,20 +71,21 @@ func (c *CloudWatch) Connect() error {
 	}
 	configProvider := credentialConfig.Credentials()
 
-	stsService := sts.New(configProvider)
+	svc := cloudwatch.New(configProvider)
 
-	params := &sts.GetSessionTokenInput{}
-
-	_, err := stsService.GetSessionToken(params)
-
-	if err != nil {
-		log.Printf("E! cloudwatch: Cannot use credentials to connect to AWS : %+v \n", err.Error())
-		return err
+	params := &cloudwatch.ListMetricsInput{
+		Namespace: aws.String(c.Namespace),
 	}
 
-	c.svc = cloudwatch.New(configProvider)
+	_, err := svc.ListMetrics(params) // Try a read-only call to test connection.
 
-	return nil
+	if err != nil {
+		log.Printf("E! cloudwatch: Error in ListMetrics API call : %+v \n", err.Error())
+	}
+
+	c.svc = svc
+
+	return err
 }
 
 func (c *CloudWatch) Close() error {
@@ -189,25 +189,6 @@ func BuildMetricDatum(point telegraf.Metric) []*cloudwatch.MetricDatum {
 			value = float64(t.Unix())
 		default:
 			// Skip unsupported type.
-			datums = datums[:len(datums)-1]
-			continue
-		}
-
-		// Do CloudWatch boundary checking
-		// Constraints at: http://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_MetricDatum.html
-		if math.IsNaN(value) {
-			datums = datums[:len(datums)-1]
-			continue
-		}
-		if math.IsInf(value, 0) {
-			datums = datums[:len(datums)-1]
-			continue
-		}
-		if value > 0 && value < float64(8.515920e-109) {
-			datums = datums[:len(datums)-1]
-			continue
-		}
-		if value > float64(1.174271e+108) {
 			datums = datums[:len(datums)-1]
 			continue
 		}

@@ -55,13 +55,6 @@ func TestHTTPClient_Write(t *testing.T) {
 				fmt.Fprintln(w, `{"results":[{}],"error":"basic auth incorrect"}`)
 			}
 
-			// test that user-specified http header is set properly
-			if r.Header.Get("X-Test-Header") != "Test-Value" {
-				w.WriteHeader(http.StatusTeapot)
-				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprintln(w, `{"results":[{}],"error":"wrong http header value"}`)
-			}
-
 			// Validate Content-Length Header
 			if r.ContentLength != 13 {
 				w.WriteHeader(http.StatusTeapot)
@@ -97,9 +90,6 @@ func TestHTTPClient_Write(t *testing.T) {
 		UserAgent: "test-agent",
 		Username:  "test-user",
 		Password:  "test-password",
-		HTTPHeaders: HTTPHeaders{
-			"X-Test-Header": "Test-Value",
-		},
 	}
 	wp := WriteParams{
 		Database:        "test",
@@ -110,8 +100,66 @@ func TestHTTPClient_Write(t *testing.T) {
 	client, err := NewHTTP(config, wp)
 	defer client.Close()
 	assert.NoError(t, err)
+	n, err := client.Write([]byte("cpu value=99\n"))
+	assert.Equal(t, 13, n)
+	assert.NoError(t, err)
 
-	err = client.WriteStream(bytes.NewReader([]byte("cpu value=99\n")))
+	_, err = client.WriteStream(bytes.NewReader([]byte("cpu value=99\n")), 13)
+	assert.NoError(t, err)
+}
+
+func TestHTTPClient_WriteParamsOverride(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/write":
+			// test that database is set properly
+			if r.FormValue("db") != "override" {
+				w.WriteHeader(http.StatusTeapot)
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintln(w, `{"results":[{}],"error":"wrong db name"}`)
+			}
+
+			// Validate the request body:
+			buf := make([]byte, 100)
+			n, _ := r.Body.Read(buf)
+			expected := "cpu value=99"
+			got := string(buf[0 : n-1])
+			if expected != got {
+				w.WriteHeader(http.StatusTeapot)
+				w.Header().Set("Content-Type", "application/json")
+				msg := fmt.Sprintf(`{"results":[{}],"error":"expected [%s], got [%s]"}`, expected, got)
+				fmt.Fprintln(w, msg)
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+			w.Header().Set("Content-Type", "application/json")
+		case "/query":
+			w.WriteHeader(http.StatusOK)
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintln(w, `{"results":[{}]}`)
+		}
+	}))
+	defer ts.Close()
+
+	config := HTTPConfig{
+		URL: ts.URL,
+	}
+	defaultWP := WriteParams{
+		Database: "test",
+	}
+	client, err := NewHTTP(config, defaultWP)
+	defer client.Close()
+	assert.NoError(t, err)
+
+	// test that WriteWithParams overrides the default write params
+	wp := WriteParams{
+		Database: "override",
+	}
+	n, err := client.WriteWithParams([]byte("cpu value=99\n"), wp)
+	assert.Equal(t, 13, n)
+	assert.NoError(t, err)
+
+	_, err = client.WriteStreamWithParams(bytes.NewReader([]byte("cpu value=99\n")), 13, wp)
 	assert.NoError(t, err)
 }
 
@@ -139,7 +187,23 @@ func TestHTTPClient_Write_Errors(t *testing.T) {
 	assert.NoError(t, err)
 
 	lp := []byte("cpu value=99\n")
-	err = client.WriteStream(bytes.NewReader(lp))
+	n, err := client.Write(lp)
+	assert.Equal(t, 0, n)
+	assert.Error(t, err)
+
+	n, err = client.WriteStream(bytes.NewReader(lp), 13)
+	assert.Equal(t, 0, n)
+	assert.Error(t, err)
+
+	wp := WriteParams{
+		Database: "override",
+	}
+	n, err = client.WriteWithParams(lp, wp)
+	assert.Equal(t, 0, n)
+	assert.Error(t, err)
+
+	n, err = client.WriteStreamWithParams(bytes.NewReader(lp), 13, wp)
+	assert.Equal(t, 0, n)
 	assert.Error(t, err)
 }
 
@@ -298,38 +362,4 @@ func TestGzipCompression(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, []byte(influxLine), uncompressed.Bytes())
-}
-
-func TestHTTPClient_PathPrefix(t *testing.T) {
-	prefix := "/some/random/prefix"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case prefix + "/write":
-			w.WriteHeader(http.StatusNoContent)
-			w.Header().Set("Content-Type", "application/json")
-		case prefix + "/query":
-			w.WriteHeader(http.StatusOK)
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintln(w, `{"results":[{}]}`)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-			msg := fmt.Sprintf("Path not found: %s", r.URL.Path)
-			fmt.Fprintln(w, msg)
-		}
-	}))
-	defer ts.Close()
-
-	config := HTTPConfig{
-		URL: ts.URL + prefix,
-	}
-	wp := WriteParams{
-		Database: "test",
-	}
-	client, err := NewHTTP(config, wp)
-	defer client.Close()
-	assert.NoError(t, err)
-	err = client.Query("CREATE DATABASE test")
-	assert.NoError(t, err)
-	err = client.WriteStream(bytes.NewReader([]byte("cpu value=99\n")))
-	assert.NoError(t, err)
 }
