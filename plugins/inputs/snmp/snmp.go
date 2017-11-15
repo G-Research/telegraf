@@ -135,7 +135,7 @@ type Snmp struct {
 	Name   string
 	Fields []Field `toml:"field"`
 
-	connectionCache []snmpConnection
+	connectionCache map[string]snmpConnection
 	initialized     bool
 }
 
@@ -143,8 +143,6 @@ func (s *Snmp) init() error {
 	if s.initialized {
 		return nil
 	}
-
-	s.connectionCache = make([]snmpConnection, len(s.Agents))
 
 	for i := range s.Tables {
 		if err := s.Tables[i].init(); err != nil {
@@ -344,36 +342,30 @@ func (s *Snmp) Gather(acc telegraf.Accumulator) error {
 		return err
 	}
 
-	var wg sync.WaitGroup
-	for i, agent := range s.Agents {
-		wg.Add(1)
-		go func(i int, agent string) {
-			defer wg.Done()
-			gs, err := s.getConnection(i)
-			if err != nil {
-				acc.AddError(Errorf(err, "agent %s", agent))
-				return
-			}
+	for _, agent := range s.Agents {
+		gs, err := s.getConnection(agent)
+		if err != nil {
+			acc.AddError(Errorf(err, "agent %s", agent))
+			continue
+		}
 
-			// First is the top-level fields. We treat the fields as table prefixes with an empty index.
-			t := Table{
-				Name:   s.Name,
-				Fields: s.Fields,
-			}
-			topTags := map[string]string{}
-			if err := s.gatherTable(acc, gs, t, topTags, false); err != nil {
-				acc.AddError(Errorf(err, "agent %s", agent))
-			}
+		// First is the top-level fields. We treat the fields as table prefixes with an empty index.
+		t := Table{
+			Name:   s.Name,
+			Fields: s.Fields,
+		}
+		topTags := map[string]string{}
+		if err := s.gatherTable(acc, gs, t, topTags, false); err != nil {
+			acc.AddError(Errorf(err, "agent %s", agent))
+		}
 
-			// Now is the real tables.
-			for _, t := range s.Tables {
-				if err := s.gatherTable(acc, gs, t, topTags, true); err != nil {
-					acc.AddError(Errorf(err, "agent %s: gathering table %s", agent, t.Name))
-				}
+		// Now is the real tables.
+		for _, t := range s.Tables {
+			if err := s.gatherTable(acc, gs, t, topTags, true); err != nil {
+				acc.AddError(Errorf(err, "agent %s: gathering table %s", agent, t.Name))
 			}
-		}(i, agent)
+		}
 	}
-	wg.Wait()
 
 	return nil
 }
@@ -576,18 +568,16 @@ func (gsw gosnmpWrapper) Get(oids []string) (*gosnmp.SnmpPacket, error) {
 }
 
 // getConnection creates a snmpConnection (*gosnmp.GoSNMP) object and caches the
-// result using `agentIndex` as the cache key.  This is done to allow multiple
-// connections to a single address.  It is an error to use a connection in
-// more than one goroutine.
-func (s *Snmp) getConnection(idx int) (snmpConnection, error) {
-	if gs := s.connectionCache[idx]; gs != nil {
+// result using `agent` as the cache key.
+func (s *Snmp) getConnection(agent string) (snmpConnection, error) {
+	if s.connectionCache == nil {
+		s.connectionCache = map[string]snmpConnection{}
+	}
+	if gs, ok := s.connectionCache[agent]; ok {
 		return gs, nil
 	}
 
-	agent := s.Agents[idx]
-
 	gs := gosnmpWrapper{&gosnmp.GoSNMP{}}
-	s.connectionCache[idx] = gs
 
 	host, portStr, err := net.SplitHostPort(agent)
 	if err != nil {
@@ -687,6 +677,7 @@ func (s *Snmp) getConnection(idx int) (snmpConnection, error) {
 		return nil, Errorf(err, "setting up connection")
 	}
 
+	s.connectionCache[agent] = gs
 	return gs, nil
 }
 

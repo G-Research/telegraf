@@ -30,9 +30,6 @@ type Kubernetes struct {
 	// Use SSL but skip chain & host verification
 	InsecureSkipVerify bool
 
-	// HTTP Timeout specified as a string - 3s, 1m, 1h
-	ResponseTimeout internal.Duration
-
 	RoundTripper http.RoundTripper
 }
 
@@ -42,9 +39,6 @@ var sampleConfig = `
 
   ## Use bearer token for authorization
   # bearer_token = /path/to/bearer/token
-
-  ## Set response_timeout (default 5 seconds)
-  # response_timeout = "5s"
 
   ## Optional SSL Config
   # ssl_ca = /path/to/cafile
@@ -107,14 +101,10 @@ func (k *Kubernetes) gatherSummary(baseURL string, acc telegraf.Accumulator) err
 	}
 
 	if k.RoundTripper == nil {
-		// Set default values
-		if k.ResponseTimeout.Duration < time.Second {
-			k.ResponseTimeout.Duration = time.Second * 5
-		}
 		k.RoundTripper = &http.Transport{
 			TLSHandshakeTimeout:   5 * time.Second,
 			TLSClientConfig:       tlsCfg,
-			ResponseHeaderTimeout: k.ResponseTimeout.Duration,
+			ResponseHeaderTimeout: time.Duration(3 * time.Second),
 		}
 	}
 

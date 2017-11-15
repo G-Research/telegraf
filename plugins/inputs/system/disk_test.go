@@ -28,13 +28,13 @@ func TestDiskUsage(t *testing.T) {
 			Device:     "/dev/sda",
 			Mountpoint: "/",
 			Fstype:     "ext4",
-			Opts:       "ro,noatime,nodiratime",
+			Opts:       "",
 		},
 		{
 			Device:     "/dev/sdb",
 			Mountpoint: "/home",
 			Fstype:     "ext4",
-			Opts:       "rw,noatime,nodiratime,errors=remount-ro",
+			Opts:       "",
 		},
 	}
 	duAll := []disk.UsageStat{
@@ -78,13 +78,11 @@ func TestDiskUsage(t *testing.T) {
 		"path":   "/",
 		"fstype": "ext4",
 		"device": "sda",
-		"mode":   "ro",
 	}
 	tags2 := map[string]string{
 		"path":   "/home",
 		"fstype": "ext4",
 		"device": "sdb",
-		"mode":   "rw",
 	}
 
 	fields1 := map[string]interface{}{
@@ -165,13 +163,13 @@ func TestDiskStats(t *testing.T) {
 			Device:     "/dev/sda",
 			Mountpoint: "/",
 			Fstype:     "ext4",
-			Opts:       "ro,noatime,nodiratime",
+			Opts:       "",
 		},
 		{
 			Device:     "/dev/sdb",
 			Mountpoint: "/home",
 			Fstype:     "ext4",
-			Opts:       "rw,noatime,nodiratime,errors=remount-ro",
+			Opts:       "",
 		},
 	}
 
@@ -180,7 +178,7 @@ func TestDiskStats(t *testing.T) {
 			Device:     "/dev/sda",
 			Mountpoint: "/",
 			Fstype:     "ext4",
-			Opts:       "ro,noatime,nodiratime",
+			Opts:       "",
 		},
 	}
 
@@ -199,13 +197,11 @@ func TestDiskStats(t *testing.T) {
 		"path":   "/",
 		"fstype": "ext4",
 		"device": "sda",
-		"mode":   "ro",
 	}
 	tags2 := map[string]string{
 		"path":   "/home",
 		"fstype": "ext4",
 		"device": "sdb",
-		"mode":   "rw",
 	}
 
 	fields1 := map[string]interface{}{

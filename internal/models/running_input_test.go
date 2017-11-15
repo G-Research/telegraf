@@ -370,17 +370,16 @@ func TestMakeMetric_TrailingSlash(t *testing.T) {
 			expectedTags: map[string]string{},
 		},
 		{
-			name:        "Field value with trailing slash okay",
+			name:        "Field value with trailing slash dropped",
 			measurement: `cpu`,
 			fields: map[string]interface{}{
 				"value": int64(42),
-				"ok":    `xyzzy\`,
+				"bad":   `xyzzy\`,
 			},
 			tags:                map[string]string{},
 			expectedMeasurement: `cpu`,
 			expectedFields: map[string]interface{}{
 				"value": int64(42),
-				"ok":    `xyzzy\`,
 			},
 			expectedTags: map[string]string{},
 		},
@@ -388,7 +387,7 @@ func TestMakeMetric_TrailingSlash(t *testing.T) {
 			name:        "Must have one field after dropped",
 			measurement: `cpu`,
 			fields: map[string]interface{}{
-				"bad": math.NaN(),
+				"bad": `xyzzy\`,
 			},
 			tags:        map[string]string{},
 			expectedNil: true,

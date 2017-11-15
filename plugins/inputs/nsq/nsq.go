@@ -25,7 +25,6 @@ package nsq
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -102,42 +101,28 @@ func (n *NSQ) gatherEndpoint(e string, acc telegraf.Accumulator) error {
 		return fmt.Errorf("%s returned HTTP status %s", u.String(), r.Status)
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return fmt.Errorf(`Error reading body: %s`, err)
-	}
-
-	data := &NSQStatsData{}
-	err = json.Unmarshal(body, data)
+	s := &NSQStats{}
+	err = json.NewDecoder(r.Body).Decode(s)
 	if err != nil {
 		return fmt.Errorf(`Error parsing response: %s`, err)
-	}
-	// Data was not parsed correctly attempt to use old format.
-	if len(data.Version) < 1 {
-		wrapper := &NSQStats{}
-		err = json.Unmarshal(body, wrapper)
-		if err != nil {
-			return fmt.Errorf(`Error parsing response: %s`, err)
-		}
-		data = &wrapper.Data
 	}
 
 	tags := map[string]string{
 		`server_host`:    u.Host,
-		`server_version`: data.Version,
+		`server_version`: s.Data.Version,
 	}
 
 	fields := make(map[string]interface{})
-	if data.Health == `OK` {
+	if s.Data.Health == `OK` {
 		fields["server_count"] = int64(1)
 	} else {
 		fields["server_count"] = int64(0)
 	}
-	fields["topic_count"] = int64(len(data.Topics))
+	fields["topic_count"] = int64(len(s.Data.Topics))
 
 	acc.AddFields("nsq_server", fields, tags)
-	for _, t := range data.Topics {
-		topicStats(t, acc, u.Host, data.Version)
+	for _, t := range s.Data.Topics {
+		topicStats(t, acc, u.Host, s.Data.Version)
 	}
 
 	return nil
@@ -204,6 +189,7 @@ func clientStats(c ClientStats, acc telegraf.Accumulator, host, version, topic, 
 		"server_version":    version,
 		"topic":             topic,
 		"channel":           channel,
+		"client_name":       c.Name,
 		"client_id":         c.ID,
 		"client_hostname":   c.Hostname,
 		"client_version":    c.Version,
@@ -212,9 +198,6 @@ func clientStats(c ClientStats, acc telegraf.Accumulator, host, version, topic, 
 		"client_tls":        strconv.FormatBool(c.TLS),
 		"client_snappy":     strconv.FormatBool(c.Snappy),
 		"client_deflate":    strconv.FormatBool(c.Deflate),
-	}
-	if len(c.Name) > 0 {
-		tags["client_name"] = c.Name
 	}
 
 	fields := map[string]interface{}{
@@ -265,7 +248,7 @@ type ChannelStats struct {
 }
 
 type ClientStats struct {
-	Name                          string `json:"name"` // DEPRECATED 1.x+, still here as the structs are currently being shared for parsing v3.x and 1.x
+	Name                          string `json:"name"`
 	ID                            string `json:"client_id"`
 	Hostname                      string `json:"hostname"`
 	Version                       string `json:"version"`

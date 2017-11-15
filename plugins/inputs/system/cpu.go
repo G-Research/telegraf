@@ -11,7 +11,7 @@ import (
 
 type CPUStats struct {
 	ps        PS
-	lastStats map[string]cpu.TimesStat
+	lastStats []cpu.TimesStat
 
 	PerCPU         bool `toml:"percpu"`
 	TotalCPU       bool `toml:"totalcpu"`
@@ -53,7 +53,7 @@ func (s *CPUStats) Gather(acc telegraf.Accumulator) error {
 	}
 	now := time.Now()
 
-	for _, cts := range times {
+	for i, cts := range times {
 		tags := map[string]string{
 			"cpu": cts.CPU,
 		}
@@ -86,18 +86,14 @@ func (s *CPUStats) Gather(acc telegraf.Accumulator) error {
 			// If it's the 1st gather, can't get CPU Usage stats yet
 			continue
 		}
-
-		lastCts, ok := s.lastStats[cts.CPU]
-		if !ok {
-			continue
-		}
+		lastCts := s.lastStats[i]
 		lastTotal := totalCpuTime(lastCts)
 		lastActive := activeCpuTime(lastCts)
 		totalDelta := total - lastTotal
 
 		if totalDelta < 0 {
-			err = fmt.Errorf("Error: current total CPU time is less than previous total CPU time")
-			break
+			s.lastStats = times
+			return fmt.Errorf("Error: current total CPU time is less than previous total CPU time")
 		}
 
 		if totalDelta == 0 {
@@ -122,12 +118,9 @@ func (s *CPUStats) Gather(acc telegraf.Accumulator) error {
 		acc.AddGauge("cpu", fieldsG, tags, now)
 	}
 
-	s.lastStats = make(map[string]cpu.TimesStat)
-	for _, cts := range times {
-		s.lastStats[cts.CPU] = cts
-	}
+	s.lastStats = times
 
-	return err
+	return nil
 }
 
 func totalCpuTime(t cpu.TimesStat) float64 {

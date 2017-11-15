@@ -2,7 +2,6 @@ package system
 
 import (
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 
@@ -54,12 +53,10 @@ func (s *DiskStats) Gather(acc telegraf.Accumulator) error {
 			// Skip dummy filesystem (procfs, cgroupfs, ...)
 			continue
 		}
-		mountOpts := parseOptions(partitions[i].Opts)
 		tags := map[string]string{
 			"path":   du.Path,
 			"device": strings.Replace(partitions[i].Device, "/dev/", "", -1),
 			"fstype": du.Fstype,
-			"mode":   mountOpts.Mode(),
 		}
 		var used_percent float64
 		if du.Used+du.Free > 0 {
@@ -167,13 +164,14 @@ func (s *DiskIOStats) Gather(acc telegraf.Accumulator) error {
 var varRegex = regexp.MustCompile(`\$(?:\w+|\{\w+\})`)
 
 func (s *DiskIOStats) diskName(devName string) string {
-	if len(s.NameTemplates) == 0 {
-		return devName
-	}
-
 	di, err := s.diskInfo(devName)
 	if err != nil {
-		log.Printf("W! Error gathering disk info: %s", err)
+		// discard error :-(
+		// We can't return error because it's non-fatal to the Gather().
+		// And we have no logger, so we can't log it.
+		return devName
+	}
+	if di == nil {
 		return devName
 	}
 
@@ -200,13 +198,14 @@ func (s *DiskIOStats) diskName(devName string) string {
 }
 
 func (s *DiskIOStats) diskTags(devName string) map[string]string {
-	if len(s.DeviceTags) == 0 {
-		return nil
-	}
-
 	di, err := s.diskInfo(devName)
 	if err != nil {
-		log.Printf("W! Error gathering disk info: %s", err)
+		// discard error :-(
+		// We can't return error because it's non-fatal to the Gather().
+		// And we have no logger, so we can't log it.
+		return nil
+	}
+	if di == nil {
 		return nil
 	}
 
@@ -218,31 +217,6 @@ func (s *DiskIOStats) diskTags(devName string) map[string]string {
 	}
 
 	return tags
-}
-
-type MountOptions []string
-
-func (opts MountOptions) Mode() string {
-	if opts.exists("rw") {
-		return "rw"
-	} else if opts.exists("ro") {
-		return "ro"
-	} else {
-		return "unknown"
-	}
-}
-
-func (opts MountOptions) exists(opt string) bool {
-	for _, o := range opts {
-		if o == opt {
-			return true
-		}
-	}
-	return false
-}
-
-func parseOptions(opts string) MountOptions {
-	return strings.Split(opts, ",")
 }
 
 func init() {

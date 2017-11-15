@@ -97,5 +97,6 @@ elif [[ -f /etc/os-release ]]; then
         else
             install_chkconfig
         fi
+        /etc/init.d/telegraf restart
     fi
 fi

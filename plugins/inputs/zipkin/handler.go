@@ -2,23 +2,22 @@ package zipkin
 
 import (
 	"compress/gzip"
-	"fmt"
 	"io/ioutil"
-	"mime"
 	"net/http"
 	"strings"
+	"sync"
 
+	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/gorilla/mux"
-	"github.com/influxdata/telegraf/plugins/inputs/zipkin/codec"
-	"github.com/influxdata/telegraf/plugins/inputs/zipkin/codec/jsonV1"
-	"github.com/influxdata/telegraf/plugins/inputs/zipkin/codec/thrift"
+	"github.com/openzipkin/zipkin-go-opentracing/_thrift/gen-go/zipkincore"
 )
 
 // SpanHandler is an implementation of a Handler which accepts zipkin thrift
 // span data and sends it to the recorder
 type SpanHandler struct {
-	Path     string
-	recorder Recorder
+	Path      string
+	recorder  Recorder
+	waitGroup *sync.WaitGroup
 }
 
 // NewSpanHandler returns a new server instance given path to handle
@@ -82,12 +81,6 @@ func (s *SpanHandler) Spans(w http.ResponseWriter, r *http.Request) {
 		defer body.Close()
 	}
 
-	decoder, err := ContentDecoder(r)
-	if err != nil {
-		s.recorder.Error(err)
-		w.WriteHeader(http.StatusUnsupportedMediaType)
-	}
-
 	octets, err := ioutil.ReadAll(body)
 	if err != nil {
 		s.recorder.Error(err)
@@ -95,19 +88,14 @@ func (s *SpanHandler) Spans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	spans, err := decoder.Decode(octets)
+	spans, err := unmarshalThrift(octets)
 	if err != nil {
 		s.recorder.Error(err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	trace, err := codec.NewTrace(spans)
-	if err != nil {
-		s.recorder.Error(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	trace := NewTrace(spans)
 
 	if err = s.recorder.Record(trace); err != nil {
 		s.recorder.Error(err)
@@ -118,25 +106,30 @@ func (s *SpanHandler) Spans(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ContentDecoer returns a Decoder that is able to produce Traces from bytes.
-// Failure should yield an HTTP 415 (`http.StatusUnsupportedMediaType`)
-// If a Content-Type is not set, zipkin assumes application/json
-func ContentDecoder(r *http.Request) (codec.Decoder, error) {
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "" {
-		return &jsonV1.JSON{}, nil
+func unmarshalThrift(body []byte) ([]*zipkincore.Span, error) {
+	buffer := thrift.NewTMemoryBuffer()
+	if _, err := buffer.Write(body); err != nil {
+		return nil, err
 	}
 
-	for _, v := range strings.Split(contentType, ",") {
-		t, _, err := mime.ParseMediaType(v)
-		if err != nil {
-			break
-		}
-		if t == "application/json" {
-			return &jsonV1.JSON{}, nil
-		} else if t == "application/x-thrift" {
-			return &thrift.Thrift{}, nil
-		}
+	transport := thrift.NewTBinaryProtocolTransport(buffer)
+	_, size, err := transport.ReadListBegin()
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("Unknown Content-Type: %s", contentType)
+
+	spans := make([]*zipkincore.Span, size)
+	for i := 0; i < size; i++ {
+		zs := &zipkincore.Span{}
+		if err = zs.Read(transport); err != nil {
+			return nil, err
+		}
+		spans[i] = zs
+	}
+
+	if err = transport.ReadListEnd(); err != nil {
+		return nil, err
+	}
+
+	return spans, nil
 }

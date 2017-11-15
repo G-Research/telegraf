@@ -3,7 +3,6 @@ package webhooks
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"reflect"
 
@@ -34,8 +33,6 @@ type Webhooks struct {
 	Mandrill   *mandrill.MandrillWebhook
 	Rollbar    *rollbar.RollbarWebhook
 	Papertrail *papertrail.PapertrailWebhook
-
-	srv *http.Server
 }
 
 func NewWebhooks() *Webhooks {
@@ -73,6 +70,19 @@ func (wb *Webhooks) Gather(_ telegraf.Accumulator) error {
 	return nil
 }
 
+func (wb *Webhooks) Listen(acc telegraf.Accumulator) {
+	r := mux.NewRouter()
+
+	for _, webhook := range wb.AvailableWebhooks() {
+		webhook.Register(r, acc)
+	}
+
+	err := http.ListenAndServe(fmt.Sprintf("%s", wb.ServiceAddress), r)
+	if err != nil {
+		acc.AddError(fmt.Errorf("E! Error starting server: %v", err))
+	}
+}
+
 // Looks for fields which implement Webhook interface
 func (wb *Webhooks) AvailableWebhooks() []Webhook {
 	webhooks := make([]Webhook, 0)
@@ -95,35 +105,11 @@ func (wb *Webhooks) AvailableWebhooks() []Webhook {
 }
 
 func (wb *Webhooks) Start(acc telegraf.Accumulator) error {
-	r := mux.NewRouter()
-
-	for _, webhook := range wb.AvailableWebhooks() {
-		webhook.Register(r, acc)
-	}
-
-	wb.srv = &http.Server{Handler: r}
-
-	ln, err := net.Listen("tcp", fmt.Sprintf("%s", wb.ServiceAddress))
-	if err != nil {
-		log.Fatalf("E! Error starting server: %v", err)
-		return err
-
-	}
-
-	go func() {
-		if err := wb.srv.Serve(ln); err != nil {
-			if err != http.ErrServerClosed {
-				acc.AddError(fmt.Errorf("E! Error listening: %v", err))
-			}
-		}
-	}()
-
+	go wb.Listen(acc)
 	log.Printf("I! Started the webhooks service on %s\n", wb.ServiceAddress)
-
 	return nil
 }
 
 func (rb *Webhooks) Stop() {
-	rb.srv.Close()
 	log.Println("I! Stopping the Webhooks service")
 }

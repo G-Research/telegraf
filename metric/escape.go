@@ -20,14 +20,8 @@ var (
 
 	// stringFieldEscaper is for escaping string field values only.
 	// see https://docs.influxdata.com/influxdb/v1.0/write_protocols/line_protocol_tutorial/#special-characters-and-keywords
-	stringFieldEscaper = strings.NewReplacer(
-		`"`, `\"`,
-		`\`, `\\`,
-	)
-	stringFieldUnEscaper = strings.NewReplacer(
-		`\"`, `"`,
-		`\\`, `\`,
-	)
+	stringFieldEscaper   = strings.NewReplacer(`"`, `\"`)
+	stringFieldUnEscaper = strings.NewReplacer(`\"`, `"`)
 )
 
 func escape(s string, t string) string {

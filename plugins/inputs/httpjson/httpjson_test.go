@@ -477,13 +477,15 @@ func TestHttpJsonBadJson(t *testing.T) {
 	assert.Equal(t, 0, acc.NFields())
 }
 
-// Test response to empty string as response object
+// Test response to empty string as response objectgT
 func TestHttpJsonEmptyResponse(t *testing.T) {
 	httpjson := genMockHttpJson(empty, 200)
 
 	var acc testutil.Accumulator
 	err := acc.GatherError(httpjson[0].Gather)
-	assert.NoError(t, err)
+
+	assert.Error(t, err)
+	assert.Equal(t, 0, acc.NFields())
 }
 
 // Test that the proper values are ignored or collected
@@ -555,21 +557,6 @@ func TestHttpJsonArray200Tags(t *testing.T) {
 					assert.FailNow(t, "unknown metric")
 				}
 			}
-		}
-	}
-}
-
-var jsonBOM = []byte("\xef\xbb\xbf[{\"value\":17}]")
-
-// TestHttpJsonBOM tests that UTF-8 JSON with a BOM can be parsed
-func TestHttpJsonBOM(t *testing.T) {
-	httpjson := genMockHttpJson(string(jsonBOM), 200)
-
-	for _, service := range httpjson {
-		if service.Name == "other_webapp" {
-			var acc testutil.Accumulator
-			err := acc.GatherError(service.Gather)
-			require.NoError(t, err)
 		}
 	}
 }

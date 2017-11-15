@@ -231,12 +231,8 @@ func (p *Postgresql) SanitizedAddress() (_ string, err error) {
 }
 
 func (p *Postgresql) accRow(meas_name string, row scanner, acc telegraf.Accumulator) error {
-	var (
-		err        error
-		columnVars []interface{}
-		dbname     bytes.Buffer
-		tagAddress string
-	)
+	var columnVars []interface{}
+	var dbname bytes.Buffer
 
 	// this is where we'll store the column name with its *interface{}
 	columnMap := make(map[string]*interface{})
@@ -251,10 +247,11 @@ func (p *Postgresql) accRow(meas_name string, row scanner, acc telegraf.Accumula
 	}
 
 	// deconstruct array of variables and send to Scan
-	if err = row.Scan(columnVars...); err != nil {
+	err := row.Scan(columnVars...)
+
+	if err != nil {
 		return err
 	}
-
 	if columnMap["datname"] != nil {
 		// extract the database name from the column map
 		dbname.WriteString((*columnMap["datname"]).(string))
@@ -262,16 +259,17 @@ func (p *Postgresql) accRow(meas_name string, row scanner, acc telegraf.Accumula
 		dbname.WriteString("postgres")
 	}
 
-	if tagAddress, err = p.SanitizedAddress(); err != nil {
+	var tagAddress string
+	tagAddress, err = p.SanitizedAddress()
+	if err != nil {
 		return err
 	}
 
 	// Process the additional tags
-	tags := map[string]string{
-		"server": tagAddress,
-		"db":     dbname.String(),
-	}
 
+	tags := map[string]string{}
+	tags["server"] = tagAddress
+	tags["db"] = dbname.String()
 	fields := make(map[string]interface{})
 COLUMN:
 	for col, val := range columnMap {
@@ -297,7 +295,6 @@ COLUMN:
 			}
 			continue COLUMN
 		}
-
 		if v, ok := (*val).([]byte); ok {
 			fields[col] = string(v)
 		} else {

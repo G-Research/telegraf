@@ -2,11 +2,10 @@ package sqlserver
 
 import (
 	"database/sql"
-	"sync"
-	"time"
-
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
+	"sync"
+	"time"
 
 	// go-mssqldb initialization
 	_ "github.com/zensqlmonitor/go-mssqldb"
@@ -245,10 +244,10 @@ UNION ALL
 SELECT 'Average pending disk IO', AveragePendingDiskIOCount = (SELECT AVG(pending_disk_io_count) FROM sys.dm_os_schedulers WITH (NOLOCK) WHERE scheduler_id < 255 )
 UNION ALL
 SELECT 'Buffer pool rate (bytes/sec)', BufferPoolRate = (1.0*cntr_value * 8 * 1024) /
-	(SELECT 1.0*cntr_value FROM sys.dm_os_performance_counters  WHERE object_name like '%Buffer Manager%' AND counter_name = 'Page life expectancy')
+	(SELECT 1.0*cntr_value FROM sys.dm_os_performance_counters  WHERE object_name like '%Buffer Manager%' AND lower(counter_name) = 'Page life expectancy')
 FROM sys.dm_os_performance_counters
 WHERE object_name like '%Buffer Manager%'
-AND counter_name = 'Database pages'
+AND counter_name = 'database pages'
 UNION ALL
 SELECT 'Memory grant pending', MemoryGrantPending = cntr_value
 FROM sys.dm_os_performance_counters
@@ -1023,7 +1022,7 @@ CREATE TABLE #PCounters
 	Primary Key(object_name, counter_name, instance_name)
 );
 INSERT #PCounters
-SELECT DISTINCT RTrim(spi.object_name) object_name
+SELECT RTrim(spi.object_name) object_name
 , RTrim(spi.counter_name) counter_name
 , RTrim(spi.instance_name) instance_name
 , spi.cntr_value
@@ -1045,7 +1044,7 @@ CREATE TABLE #CCounters
 	Primary Key(object_name, counter_name, instance_name)
 );
 INSERT #CCounters
-SELECT DISTINCT RTrim(spi.object_name) object_name
+SELECT RTrim(spi.object_name) object_name
 , RTrim(spi.counter_name) counter_name
 , RTrim(spi.instance_name) instance_name
 , spi.cntr_value
@@ -1437,16 +1436,16 @@ SELECT
 , type = 'Wait stats'
 ---- values
 , [I/O] = SUM([I/O])
-, [Latch] = SUM([LATCH])
-, [Lock] = SUM([LOCK])
-, [Network] = SUM([NETWORK])
-, [Service broker] = SUM([SERVICE BROKER])
-, [Memory] = SUM([MEMORY])
-, [Buffer] = SUM([BUFFER])
+, [Latch] = SUM([Latch])
+, [Lock] = SUM([Lock])
+, [Network] = SUM([Network])
+, [Service broker] = SUM([Service broker])
+, [Memory] = SUM([Memory])
+, [Buffer] = SUM([Buffer])
 , [CLR] = SUM([CLR])
 , [SQLOS] = SUM([SQLOS])
-, [XEvent] = SUM([XEVENT])
-, [Other] = SUM([OTHER])
+, [XEvent] = SUM([XEvent])
+, [Other] = SUM([Other])
 , [Total] = SUM([I/O]+[LATCH]+[LOCK]+[NETWORK]+[SERVICE BROKER]+[MEMORY]+[BUFFER]+[CLR]+[XEVENT]+[SQLOS]+[OTHER])
 FROM
 (
@@ -1480,16 +1479,16 @@ SELECT
 , type = 'Wait stats'
 ---- values
 , [I/O] = SUM([I/O])
-, [Latch] = SUM([LATCH])
-, [Lock] = SUM([LOCK])
-, [Network] = SUM([NETWORK])
-, [Service broker] = SUM([SERVICE BROKER])
-, [Memory] = SUM([MEMORY])
-, [Buffer] = SUM([BUFFER])
+, [Latch] = SUM([Latch])
+, [Lock] = SUM([Lock])
+, [Network] = SUM([Network])
+, [Service broker] = SUM([Service broker])
+, [Memory] = SUM([Memory])
+, [Buffer] = SUM([Buffer])
 , [CLR] = SUM([CLR])
 , [SQLOS] = SUM([SQLOS])
-, [XEvent] = SUM([XEVENT])
-, [Other] = SUM([OTHER])
+, [XEvent] = SUM([XEvent])
+, [Other] = SUM([Other])
 , [Total] = SUM([I/O]+[LATCH]+[LOCK]+[NETWORK]+[SERVICE BROKER]+[MEMORY]+[BUFFER]+[CLR]+[XEVENT]+[SQLOS]+[OTHER])
 FROM
 (
